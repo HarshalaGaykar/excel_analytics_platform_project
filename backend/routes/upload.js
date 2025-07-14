@@ -38,4 +38,31 @@ router.get("/history", auth, async (req, res) => {
   }
 });
 
+router.post("/visualize/:uploadId", auth, async (req, res) => {
+  try {
+    const { uploadId } = req.params;
+    const { type, data, image } = req.body; // Added image field
+
+    const upload = await Upload.findOne({ _id: uploadId, userId: req.user.id });
+    if (!upload) return res.status(404).json({ msg: "Upload not found" });
+
+    upload.visualizations.push({ type, data, visualizationImage: image });
+    await upload.save();
+
+    res.json({ msg: "Visualization saved", visualizations: upload.visualizations });
+  } catch (error) {
+    res.status(500).json({ msg: "Server error", error });
+  }
+});
+
+router.get("/:uploadId", auth, async (req, res) => {
+  try {
+    const upload = await Upload.findOne({ _id: req.params.uploadId, userId: req.user.id });
+    if (!upload) return res.status(404).json({ msg: "Upload not found" });
+    res.json({ data: upload.data, visualizations: upload.visualizations });
+  } catch (error) {
+    res.status(500).json({ msg: "Server error", error });
+  }
+});
+
 module.exports = router;
