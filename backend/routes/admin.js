@@ -1,85 +1,84 @@
 const express = require("express");
 const router = express.Router();
-const User = require("../models/User");
-const Upload = require("../models/Upload");
-const auth = require("../middleware/auth");
+const auth = require("../middleware/auth"); // Assuming this checks for logged-in users
+const User = require("../models/User"); // Assuming you have a User model
+const Upload = require("../models/Upload"); // For file upload stats
 
-router.get("/stats", auth, async (req, res) => {
+// Middleware to check admin role
+const isAdmin = (req, res, next) => {
+  if (!req.user || !req.user.role || req.user.role !== "admin") {
+    return res.status(403).json({ msg: "Access denied. Admin privileges required." });
+  }
+  next();
+};
+
+// Get admin stats
+router.get("/stats", [auth, isAdmin], async (req, res) => {
   try {
-    if (req.user.role !== "admin") return res.status(403).json({ msg: "Admin access required" });
-
-    const totalUsersLoggedIn = await User.countDocuments({ lastLogin: { $exists: true, $ne: null } });
+    const totalUsersLoggedIn = await User.countDocuments({ isBlocked: false }); // Adjust based on your logic
     const totalFilesUploaded = await Upload.countDocuments();
     const mostUsedChartTypes = await Upload.aggregate([
       { $unwind: "$visualizations" },
       { $group: { _id: "$visualizations.type", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
-      { $limit: 5 },
-    ]).then((results) => results.map((r) => ({ type: r._id, count: r.count })));
+      { $limit: 5 }
+    ]).then(results => results.map(r => ({ type: r._id, count: r.count })));
 
-    res.json({ totalUsersLoggedIn, totalFilesUploaded, mostUsedChartTypes });
+    res.json({
+      totalUsersLoggedIn,
+      totalFilesUploaded,
+      mostUsedChartTypes,
+    });
   } catch (error) {
-    console.error("Stats error:", error.message);
-    res.status(500).json({ msg: "Server error" });
+    console.error("Stats fetch error:", error);
+    res.status(500).json({ msg: "Failed to load admin stats", error: error.message });
   }
 });
 
-router.get("/users", auth, async (req, res) => {
+// Get all users
+router.get("/users", [auth, isAdmin], async (req, res) => {
   try {
-    if (req.user.role !== "admin") return res.status(403).json({ msg: "Admin access required" });
-
-    const users = await User.find().select("username isBlocked _id");
+    const users = await User.find().select("username isBlocked _id"); // Adjust fields as needed
     res.json(users);
   } catch (error) {
-    console.error("Users fetch error:", error.message);
-    res.status(500).json({ msg: "Server error" });
+    console.error("Users fetch error:", error);
+    res.status(500).json({ msg: "Failed to load users", error: error.message });
   }
 });
 
-router.put("/users/:userId/block", auth, async (req, res) => {
+// Block a user
+router.put("/users/:userId/block", [auth, isAdmin], async (req, res) => {
   try {
-    if (req.user.role !== "admin") return res.status(403).json({ msg: "Admin access required" });
-
-    const user = await User.findById(req.params.userId);
+    const user = await User.findByIdAndUpdate(req.params.userId, { isBlocked: true }, { new: true });
     if (!user) return res.status(404).json({ msg: "User not found" });
-
-    user.isBlocked = true;
-    await user.save();
     res.json({ msg: "User blocked", user });
   } catch (error) {
-    console.error("Block error:", error.message);
-    res.status(500).json({ msg: "Server error" });
+    console.error("Block user error:", error);
+    res.status(500).json({ msg: "Failed to block user", error: error.message });
   }
 });
 
-router.put("/users/:userId/unblock", auth, async (req, res) => {
+// Unblock a user
+router.put("/users/:userId/unblock", [auth, isAdmin], async (req, res) => {
   try {
-    if (req.user.role !== "admin") return res.status(403).json({ msg: "Admin access required" });
-
-    const user = await User.findById(req.params.userId);
+    const user = await User.findByIdAndUpdate(req.params.userId, { isBlocked: false }, { new: true });
     if (!user) return res.status(404).json({ msg: "User not found" });
-
-    user.isBlocked = false;
-    await user.save();
     res.json({ msg: "User unblocked", user });
   } catch (error) {
-    console.error("Unblock error:", error.message);
-    res.status(500).json({ msg: "Server error" });
+    console.error("Unblock user error:", error);
+    res.status(500).json({ msg: "Failed to unblock user", error: error.message });
   }
 });
 
-router.delete("/users/:userId", auth, async (req, res) => {
+// Delete a user
+router.delete("/users/:userId", [auth, isAdmin], async (req, res) => {
   try {
-    if (req.user.role !== "admin") return res.status(403).json({ msg: "Admin access required" });
-
-    const user = await User.findById(req.params.userId);
+    const user = await User.findByIdAndDelete(req.params.userId);
     if (!user) return res.status(404).json({ msg: "User not found" });
-
-    await user.remove();
     res.json({ msg: "User deleted" });
   } catch (error) {
-    console.error("Delete error:", error.message);
-    res.status(500).json({ msg: "Server error" });
+    console.error("Delete user error:", error);
+    res.status(500).json({ msg: "Failed to delete user", error: error.message });
   }
 });
 

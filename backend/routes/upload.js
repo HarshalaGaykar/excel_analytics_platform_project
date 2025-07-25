@@ -46,7 +46,6 @@ router.post("/visualize/:uploadId", auth, async (req, res) => {
     const { uploadId } = req.params;
     const { type, data, image, xAxis, yAxis } = req.body;
 
-    // Validate input
     if (!uploadId || !type || !xAxis || !yAxis || !image) {
       return res.status(400).json({ msg: "Missing required fields: type, xAxis, yAxis, or image" });
     }
@@ -54,10 +53,8 @@ router.post("/visualize/:uploadId", auth, async (req, res) => {
     const upload = await Upload.findOne({ _id: uploadId, userId: req.user.id });
     if (!upload) return res.status(404).json({ msg: "Upload not found" });
 
-    // Ensure data is an array (normalize for both 2D and 3D)
     const normalizedData = Array.isArray(data) ? data : [data];
 
-    // Create visualization object
     const visualization = {
       type,
       data: normalizedData,
@@ -67,7 +64,6 @@ router.post("/visualize/:uploadId", auth, async (req, res) => {
       createdAt: new Date(),
     };
 
-    // Add visualization to the upload's visualizations array
     upload.visualizations.push(visualization);
     await upload.save();
 
